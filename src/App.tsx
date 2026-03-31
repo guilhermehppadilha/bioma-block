@@ -1,22 +1,28 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { PhaserGame } from './components/PhaserGame';
-import { useGameEvent } from './hooks/useGameEvent';
-import { GameEvents, IScorePayload } from './game/events/EventBus';
+import { UIManager } from './components/ui/UIManager';
+import { useMobileAppLifecycle } from './hooks/useMobileAppLifecycle';
+import { PokiService } from './game/systems/PokiService';
 
 export const App: React.FC = () => {
-    const [score, setScore] = useState(0);
+    const [isPokiReady, setIsPokiReady] = useState(false);
+    
+    useMobileAppLifecycle();
 
-    useGameEvent<IScorePayload>(GameEvents.SCORE_UPDATED, (payload) => {
-        setScore(payload.score);
-    })
+    useEffect(() => {
+        PokiService.init().finally(() => {
+            setIsPokiReady(true);
+        });
+    }, []);
+
+    if (!isPokiReady) {
+        return <div className="bg-black w-screen h-screen flex items-center justify-center text-white">Carregando...</div>;
+    }
 
     return (
-        <div style={{ position: 'relative', width: '100vw', height: '100vh' }}>
+        <div className="relative w-screen h-screen overflow-hidden bg-black">
             <PhaserGame />
-            {/* Camada React (HUD) sobreposta ao Canvas */}
-            <div style={{ position: 'absolute', top: 10, left: 10, color: 'white' }}>
-                Score: {score}
-            </div>
+            <UIManager />
         </div>
     );
 };

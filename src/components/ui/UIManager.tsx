@@ -1,17 +1,25 @@
 import React from 'react';
 import { Pause } from 'lucide-react';
-import { useUIStore } from '../../store/useUIStore';
+import { useUIStore } from '@/store/useUIStore';
 import { MainMenu } from './MainMenu';
 import { PauseMenu } from './PauseMenu';
-import { EventBus, GameEvents } from '../../game/events/EventBus';
+import { EventBus, GameEvents } from '@/game/events/EventBus';
+import { PokiService } from '@/game/systems/PokiService';
 
 export const UIManager: React.FC = () => {
     const currentScreen = useUIStore((state) => state.currentScreen);
     const setScreen = useUIStore((state) => state.setScreen);
 
+    const handleStartGame = () => {
+        setScreen('PLAYING');
+        EventBus.emit(GameEvents.START_GAME); 
+        PokiService.gameplayStart();
+    };
+
     const handlePause = () => {
         setScreen('PAUSED');
         EventBus.emit(GameEvents.PAUSE_GAME);
+        PokiService.gameplayStop();
     };
 
     return (

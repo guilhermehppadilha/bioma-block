@@ -2,6 +2,8 @@ import { GameObjects, Scene } from 'phaser';
 
 import { EventBus } from '../EventBus';
 
+import { PokiService } from '../systems/PokiService';
+
 export class MainMenu extends Scene
 {
     background: GameObjects.Image;
@@ -19,6 +21,8 @@ export class MainMenu extends Scene
         this.background = this.add.image(512, 384, 'background');
 
         this.logo = this.add.image(512, 300, 'logo').setDepth(100);
+
+        PokiService.gameLoadingFinished();
 
         this.title = this.add.text(512, 460, 'Main Menu', {
             fontFamily: 'Arial Black', fontSize: 38, color: '#ffffff',
