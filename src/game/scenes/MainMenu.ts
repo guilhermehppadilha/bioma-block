@@ -1,8 +1,8 @@
 import { GameObjects, Scene } from 'phaser';
 
-import { EventBus } from '../EventBus';
+import { EventBus } from '@/game/events/EventBus';
 
-import { PokiService } from '../systems/PokiService';
+import { PokiService } from '@/game/systems/PokiService';
 
 export class MainMenu extends Scene
 {

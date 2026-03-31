@@ -1,7 +1,4 @@
 import Phaser from 'phaser';
-import { BootScene } from '@/game/scenes/BootScene';
-import { PreloadScene } from '@/game/scenes/PreloadScene';
-import { MainMenuScene } from '@/game/scenes/MainMenuScene';
 import { GameScene } from '@/game/scenes/GameScene';
 
 export const getGameConfig = (parent: string): Phaser.Types.Core.GameConfig => ({
@@ -26,6 +23,6 @@ export const getGameConfig = (parent: string): Phaser.Types.Core.GameConfig => (
         }
     },
     backgroundColor: '#000000',
-    scene: [BootScene, PreloadScene, MainMenuScene, GameScene],
+    scene: [GameScene],
     disableContextMenu: true,
 });

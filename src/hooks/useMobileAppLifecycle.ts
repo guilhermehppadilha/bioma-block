@@ -1,4 +1,3 @@
-// src/hooks/useMobileAppLifecycle.ts
 import { useEffect } from 'react';
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
