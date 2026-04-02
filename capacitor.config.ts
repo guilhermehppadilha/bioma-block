@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-    appId: 'com.mokk.your-game-name',
-    appName: 'boilerplate-phaser-ts',
+    appId: 'com.mokk.bioma-block',
+    appName: 'bioma-block',
     webDir: 'dist',
     // bundledWebRuntime: false,
     server: {
