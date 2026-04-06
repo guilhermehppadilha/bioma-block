@@ -1,27 +1,25 @@
 import { Scene } from 'phaser';
 import { EventBus, GameEvents } from '@/game/events/EventBus';
-import { HexGridManager, HexCoord } from '@/game/systems/HexGridManager';
+import { HexCoord, HexGridManager } from '@/game/systems/HexGridManager';
 import { GameConstants } from '@/game/config/GameConstants';
 import { ContinentsDB, ContinentConfig } from '@/game/data/ContinentsData';
 import { BiomeBlock } from '@/game/prefabs/BiomeBlock';
-
-const availableHexShapes: HexCoord[][] = [
-    [{ q: 0, r: 0 }],
-    [{ q: 0, r: 0 }, { q: 1, r: 0 }],
-    [{ q: 0, r: 0 }, { q: 1, r: -1 }, { q: 1, r: 0 }],
-    [{ q: 0, r: 0 }, { q: 1, r: 0 }, { q: 2, r: 0 }]
-];
+import { PieceSpawner } from '@/game/systems/PieceSpawner';
+import { FloatingTextManager } from '@/game/systems/FloatingTextManager';
 
 export class GameScene extends Scene {
     private hexManager!: HexGridManager;
+    private pieceSpawner!: PieceSpawner;
     private visualGrid: Map<string, Phaser.GameObjects.Polygon> = new Map();
     private activePieces: BiomeBlock[] = [];
+    private previewPieces: BiomeBlock[] = [];
+    private previewBackground!: Phaser.GameObjects.Graphics;
     private currentContinent!: ContinentConfig;
+
+    private floatingTextManager!: FloatingTextManager;
 
     private boardCenterX!: number;
     private boardCenterY!: number;
-
-    // ✅ OTIMIZAÇÃO: Lista pré-criada de polígonos para a sombra (Evita usar Graphics para manter paridade visual)
     private shadowHexes: Phaser.GameObjects.Polygon[] = [];
 
     private onPauseHandler = () => { if (this.scene.isActive()) this.scene.pause(); };
@@ -41,8 +39,9 @@ export class GameScene extends Scene {
 
     create() {
         this.hexManager = new HexGridManager(4);
+        
+        this.pieceSpawner = new PieceSpawner(this, this.currentContinent);
 
-        // ✅ INICIALIZA O POOL DE SOMBRAS (Cria até 5 hexágonos invisíveis para uso simultâneo)
         const hexPoints = this.getHexPolygonPoints();
         for (let i = 0; i < 5; i++) {
             const shadowPoly = this.add.polygon(0, 0, hexPoints, 0xffffff, 0.4);
@@ -53,8 +52,12 @@ export class GameScene extends Scene {
         }
 
         this.drawIsland();
-        this.spawnPieces();
+        this.createPreviewBoxUI();
+        this.activePieces = this.pieceSpawner.initializeFirstHands(this.hexManager);
+        this.renderPreviewPieces();
         this.setupDragEvents();
+
+        this.floatingTextManager = new FloatingTextManager(this);
 
         EventBus.emit(GameEvents.SCENE_READY, this);
 
@@ -69,6 +72,16 @@ export class GameScene extends Scene {
             EventBus.off(GameEvents.QUIT_TO_MENU, this.onQuitHandler);
             EventBus.off(GameEvents.RESTART_GAME, this.onRestartHandler);
         });
+    }
+
+    private createPreviewBoxUI() {
+        const screenWidth = this.cameras.main.width;
+        const previewY = this.cameras.main.height - 280;
+        
+        this.previewBackground = this.add.graphics();
+        this.previewBackground.fillStyle(0x000000, 0.3);
+        this.previewBackground.fillRoundedRect(screenWidth / 2 - 100, previewY - 30, 200, 60, 10);
+        this.previewBackground.setDepth(1);
     }
 
     private getHexPolygonPoints(): number[] {
@@ -130,21 +143,12 @@ export class GameScene extends Scene {
     }
 
     private spawnPieces() {
-        const screenWidth = this.cameras.main.width;
-        const spawnY = this.cameras.main.height - 150;
+        this.activePieces = this.pieceSpawner.generateHand(this.hexManager);
+        
+        // Atualiza a caixinha visual com o lote que vem DEPOIS dessa mão gerada
+        this.renderPreviewPieces();
 
-        for (let i = 0; i < 3; i++) {
-            const randomShape = availableHexShapes[Phaser.Math.Between(0, availableHexShapes.length - 1)];
-            const availableBiomes = Object.keys(this.currentContinent.biomes).map(Number);
-            const randomBiome = availableBiomes[Phaser.Math.Between(0, availableBiomes.length - 1)];
-            
-            const startX = (screenWidth / 4) * (i + 1); 
-            
-            const piece = new BiomeBlock(this, startX, spawnY, randomShape, randomBiome, this.currentContinent);
-            piece.setScale(0.8);
-            this.activePieces.push(piece);
-        }
-
+        // Checa Game Over imediatamente (Motor de Jogo)
         if (this.hexManager.isGameOver(this.activePieces.map(p => p.shape))) {
             this.evaluateBoardState();
         }
@@ -281,6 +285,68 @@ export class GameScene extends Scene {
             score: totalTurnEnergy, 
             multiplier: clearResult.comboMultiplier 
         });
+    }
+
+    private renderPreviewPieces() {
+        this.previewPieces.forEach(p => p.destroy());
+        this.previewPieces = [];
+
+        const nextBatchQueue = this.pieceSpawner.getNextBatchPreview();
+        const screenWidth = this.cameras.main.width;
+        const previewY = this.cameras.main.height - 250; 
+        
+        const offsetsX = [screenWidth / 2 - 60, screenWidth / 2, screenWidth / 2 + 60];
+
+        nextBatchQueue.forEach((queuedData, index) => {
+            
+            const miniPiece = new BiomeBlock(
+                this,
+                offsetsX[index],
+                previewY,
+                queuedData.definition.coords,
+                queuedData.biome,
+                this.currentContinent
+            );
+            
+            miniPiece.setScale(0.3);
+            miniPiece.disableInteractive(); 
+            miniPiece.setDepth(2);
+            miniPiece.setAlpha(0.7); 
+            
+            this.previewPieces.push(miniPiece);
+        });
+    }
+
+    private processClearedLines(linesToClear: string[][]) {
+        let totalScore = 0;
+        let isCombo = linesToClear.length > 1;
+        
+        linesToClear.forEach((lineKeyArray, index) => {
+            // ... (A lógica de checar Pureza e Score que fizemos antes fica aqui)
+            const isPure = true; // Exemplo
+            const lineScore = isPure ? 30 : 10;
+            totalScore += lineScore;
+
+            const middleKey = lineKeyArray[Math.floor(lineKeyArray.length / 2)];
+            const [q, r] = middleKey.split(',').map(Number);
+            const { x, y } = this.axialToPixel(q, r);
+
+            // ✅ Delegação do texto para o Manager (com atraso progressivo)
+            this.floatingTextManager.showScore(x, y, lineScore, isPure, index * 200);
+
+            // ... (Lógica de destruição visual das peças)
+        });
+
+        if (isCombo) {
+            const comboMultiplier = linesToClear.length;
+            totalScore = totalScore * comboMultiplier;
+            
+            this.floatingTextManager.showBoardAlert(`COMBO X${comboMultiplier}!`, '#FF4500', 400);
+        }
+
+        if (totalScore > 0) {
+            EventBus.emit(GameEvents.SCORE_UPDATED, totalScore);
+        }
     }
 
     private evaluateBoardState() {
